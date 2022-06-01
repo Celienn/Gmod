@@ -1,10 +1,10 @@
-const height = window.innerHeight
-const width = window.innerWidth
-var inc = 0.001
+const Height = window.innerHeight/5
+const Width = window.innerWidth/5
+var inc = 0.005
 
 function setup(){
-    createCanvas(window.innerWidth,window.innerHeight)
-    //createCanvas(width,height)
+    //createCanvas(window.innerWidth,window.innerHeight)
+    createCanvas(Width,Height)
 }
 
 var woff = 0
@@ -14,10 +14,10 @@ function draw(){
     stroke(255);
     noFill();
     var yoff = 0
-    for (var y = 0; y < height; y++){
+    for (var y = 0; y < Height; y++){
         var xoff = 0
-        for (var x = 0; x < width; x++){
-            var index = (x + y * width) * 4
+        for (var x = 0; x < Width; x++){
+            var index = (x + y * Width) * 4
             var random =  noise(xoff,yoff,woff)
             if ( random > 0.5 ) {
                 pixels[index+0] = (random / 0.5) * (random * 10)
@@ -32,14 +32,14 @@ function draw(){
             }else {
                 pixels[index+0] = random 
                 pixels[index+1] = random
-                pixels[index+2] = random * 100
+                pixels[index+2] = random 
                 pixels[index+3] = 255
             }
             xoff+=inc
         } 
         yoff-=inc
     }
-    woff+=0.01
+    woff+=0.003
     updatePixels();
 }
 
