@@ -15,10 +15,11 @@ Config = {
     x = X(1200),
     y = Y(800),
     size = Size(1),
-    key = KEY_B
+    key = KEY_B,
+    ThemeColor = Color(0,162,255)
 }
 
-Menu = 1
+Menu = false
 
 function tableLenght(tab)
     local count = 0
@@ -33,6 +34,13 @@ local html = nil
 local FShow = {}
 local spawnPos = {x=25,y=25}
 
+local Drag = 
+{
+    MousePos = nil,
+    Size = 1
+}
+
+
 local Data = 
 {
     Wallhack = 
@@ -41,12 +49,16 @@ local Data =
         HSV = false,
         Speed = 50,
         Player = true,
-        Props = false,
+        Props = true,
         Entity = false,
         Material = 
         {
-            
-        }
+            ["$translucent"] = 0,
+            ["$vertexalpha"] = 0
+        },
+        LightStyle = 1,
+        LightPattern = "m",
+        Key = KEY_NONE
     },
     Tracer = 
     {
@@ -56,7 +68,8 @@ local Data =
         Speed = 50,
         Player = true,
         Props = false,
-        Entity = false
+        Entity = false,
+        Key = KEY_NONE
     }
 }
 
@@ -69,6 +82,96 @@ CreateMaterial( "wallhack", "VertexLitGeneric", {
     ["$ignorez"] = 1
   } )
 
+surface.CreateFont( "page-font", {
+	font = "Arial", --  Use the font-name which is shown to you by your operating system Font Viewer, not the file name
+	extended = false,
+	size = 30,
+	weight = 500,
+	blursize = 0,
+	scanlines = 0,
+	antialias = true,
+	underline = false,
+	italic = false,
+	strikeout = false,
+	symbol = false,
+	rotary = false,
+	shadow = false,
+	additive = false,
+	outline = false,
+} )
+
+function setFontSize(size)
+    surface.CreateFont( "custom-font", {
+        font = "Cambria", 
+        extended = false,
+        size = 17*size,
+        weight = 500,
+        blursize = 0,
+        scanlines = 0,
+        antialias = true,
+        underline = false,
+        italic = false,
+        strikeout = false,
+        symbol = false,
+        rotary = false,
+        shadow = false,
+        additive = false,
+        outline = false,
+    } )
+end
+
+function resizeFrame(frame,size)
+    local function changeSize(Frame,Size,DFrame)
+        local x,y = Frame:GetPos()
+        local sx,sy = Frame:GetSize()
+        if Drag[Frame] == nil then
+            Drag[Frame] = {
+                LastSize = 
+                {
+                    x = sx,
+                    y = sy
+                },
+                Size = 
+                {
+                    x = sx,
+                    y = sy
+                },
+                Pos = 
+                {
+                    x = x,
+                    y = y
+                }
+            }
+        end
+
+        local lsx = Drag[Frame]["LastSize"]["x"]
+        local lsy = Drag[Frame]["LastSize"]["y"]
+        local sx = Drag[Frame]["Size"]["x"]
+        local sy = Drag[Frame]["Size"]["y"]
+        if DFrame then
+            local x,y = Frame:GetPos()
+            local x = (x*(lsx/sx))
+            local y = (y*(lsy/sy))
+            print(x,x*(lsx/sx),y,y*(lsy/sy))
+            --Frame:SetPos(x*(lsx/sx),y*(lsy/sy))
+        else
+            local x = Drag[Frame]["Pos"]["x"]
+            local y = Drag[Frame]["Pos"]["y"]
+            Frame:SetPos(x*Size,y*Size)
+        end
+        setFontSize(Size)
+        if Frame:GetName() != "nosize" then 
+            Frame:SetSize(sx*Size,sy*Size)
+        end
+        local x,y = Frame:GetSize()
+        Drag[Frame]["LastSize"]["x"] = x
+        Drag[Frame]["LastSize"]["y"] = y
+    end
+    changeSize(frame,size,true)
+    for _, child in ipairs( frame:GetChildren() ) do
+        changeSize(child,size)
+    end
+end
 
 function OpenGui()
 
@@ -86,6 +189,7 @@ function OpenGui()
     background = vgui.Create("DHTML", GuiFrame)
     background:SetPos(0,20)
     background:SetSize(w,h-Y(60))
+    background:SetMouseInputEnabled(true)
     //background:OpenURL("asset://garrysmod/html/background.html") 
     
     --PAGES
@@ -109,7 +213,6 @@ function OpenGui()
             draw.RoundedBox( 0, 0, 0, w, h, Color( 20, 17, 44) ) 
             draw.RoundedBox( 0, X(2), Y(2), w-X(4), h-Y(4), Color( 120, 120, 120) ) 
         end
-        pages["buttonPos"] = pages["buttonPos"] + 50
         page:Hide()
         -- CLOSE BUTTON
         local w,h = page:GetSize()
@@ -117,6 +220,7 @@ function OpenGui()
         DermaImageButton:SetPos( w-X(20), 0 )			
         DermaImageButton:SetSize( X(20), Y(20) )			
         DermaImageButton:SetImage( "icon16/cross2.png" )	
+        DermaImageButton:SetName("nosize")
         DermaImageButton.DoClick = function()
             pages[pages["count"]]["show"] = false
             pages[pages["count"]]["frame"]:Hide()
@@ -125,11 +229,17 @@ function OpenGui()
                 draw.RoundedBox( 0, X(2), Y(2), w-X(4), h-Y(4), Color( 200, 200, 200) ) 
             end
         end
-        local DermaImageButton = vgui.Create( "DImageButton", Frame )	
-        DermaImageButton:SetSize( X(40), Y(40) )
-        DermaImageButton:SetPos(X(5),0)
-        DermaImageButton:SetImage( icon )	
-        DermaImageButton.DoClick = function()
+        local DLabel = vgui.Create( "DLabel", Frame )
+        DLabel:SetText(label)
+        DLabel:SetFont("page-font")
+        DLabel:SizeToContents()
+        local x,y = Frame:GetSize()
+        local x = DLabel:GetSize()
+        Frame:SetSize(x+X(20),y)
+        DLabel:Center()
+        DLabel:SetMouseInputEnabled(true)
+        DLabel:SetTextColor(Color(0,0,0))
+        DLabel.DoClick = function()
             local Index = nil
             table.foreach(pages,function(index,value)
                 if index != "count" and index != "buttonPos" then
@@ -171,8 +281,8 @@ function OpenGui()
                     end)
                 end)
                 local frame = pages[Index]["frame"]
-                if !FShow[frame:GetTitle()] then
-                    FShow[frame:GetTitle()] = true
+                if !FShow[frame] then
+                    FShow[frame] = true
                     frame:SetPos(spawnPos["x"],spawnPos["y"])
                     local x , y = frame:GetSize()
                     spawnPos["x"] = spawnPos["x"] + x + 25
@@ -192,6 +302,7 @@ function OpenGui()
                 end
             end
         end
+        pages["buttonPos"] = pages["buttonPos"] + Frame:GetSize()
         local placeolder = vgui.Create("DLabel",setting)
         placeolder:SetText(page:GetTitle())
         placeolder:SizeToContents()
@@ -259,26 +370,26 @@ function OpenGui()
         DLabel:SetFont("custom-font")
         DLabel:SetMouseInputEnabled( true )
         function DLabel:DoClick() 
-            if DColorButton:GetColor() == Color(0, 147, 173) then
+            if DColorButton:GetColor() == Config["ThemeColor"] then
                 DColorButton:SetColor( Color( 90, 90, 90) )
                 off()
             else
-                DColorButton:SetColor( Color( 0, 147, 173) )
+                DColorButton:SetColor( Config["ThemeColor"] )
                 on()
             end
         end
         pages[Index]["pos"] = pages[Index]["pos"] + 20
         function DColorButton:DoClick() 
-            if self:GetColor() == Color(0, 147, 173) then
+            if self:GetColor() == Config["ThemeColor"] then
                 DColorButton:SetColor( Color( 90, 90, 90) )
                 off()
             else
-                DColorButton:SetColor( Color( 0, 147, 173) )
+                DColorButton:SetColor( Config["ThemeColor"] )
                 on()
             end
         end
         if initValue then
-            DColorButton:SetColor( Color( 0, 147, 173) )
+            DColorButton:SetColor( Config["ThemeColor"] )
             on()
         else
             DColorButton:SetColor( Color( 90, 90, 90) )
@@ -287,7 +398,7 @@ function OpenGui()
         if param != nil then
             local setting = vgui.Create("DFrame", background)
             pages["count"] = pages["count"] + 1
-            pages[pages["count"]] = {frame = setting,pos = 0,Descendants={}} 
+            pages[pages["count"]] = {frame = setting,pos = 0,Descendants={},Key="None"} 
             table.insert(pages[Index]["Descendants"],setting)
             setting:SetTitle(DLabel:GetText() .. "\'s settings")
             local placeolder = vgui.Create("DLabel",setting)
@@ -302,6 +413,7 @@ function OpenGui()
             local x,y = frame:GetPos()
             setting:SetPos(x,y)
             setting:Hide()
+            FShow[setting] = false
             param(setting)
             local w,h = setting:GetSize()
             local DermaImageButton = vgui.Create( "DImageButton", setting )
@@ -322,6 +434,7 @@ function OpenGui()
                 local x,y = frame:GetPos()
                 local w,h = frame:GetSize()
                 setting:SetPos(x+w+10,y)
+                FShow[setting] = true
                 setting:Show()
                 table.foreach(pages,function(index,var)
                     if index != "count" and index != "buttonPos" then
@@ -331,10 +444,55 @@ function OpenGui()
                     end
                 end)
             end)
-            addOption("Bind","icon16/add.png",DLabel,function()
-                
-            end)
         end
+        if !Data[label] then Data[label] = {} end
+        if !Data[label]["Key"] then Data[label]["Key"] = KEY_NONE end
+        local DFrame = vgui.Create("DFrame")
+        DFrame:SetTitle("")
+        DFrame:SetSize(X(300),Y(150))
+        DFrame:Center()
+        DFrame:MakePopup()
+        DFrame:SetBackgroundBlur( true )
+        DFrame:ParentToHUD()
+        DFrame:ShowCloseButton( false )
+        local DBinder = vgui.Create("DBinder",DFrame)
+        local x , y = DFrame:GetSize()
+        DBinder:SetSize(x*0.75,y*0.75-Y(25))
+        DBinder:Center()
+        local x , y = DBinder:GetPos()
+        DBinder:SetPos(x,y+Y(25/2))
+        function DBinder:OnChange(key)
+            Data[label]["Key"] = key
+            if ( key ) then
+                hook.Add( "PlayerButtonDown", label, function( ply, button )
+                    if key == button then 
+                        DFrame:Hide()
+                        if DColorButton:GetColor() == Config["ThemeColor"] then
+                            DColorButton:SetColor( Color( 90, 90, 90) )
+                            off()
+                        else
+                            DColorButton:SetColor( Config["ThemeColor"] )
+                            on()
+                        end
+                    end
+                end)
+            end
+            RunConsoleCommand("toolmenu")
+            DFrame:Hide()
+        end
+        DFrame:Hide()
+        addOption("Bind","icon16/add.png",DLabel,function()
+            if Data[label]["Key"] != nil then
+                local text = input.GetKeyName(Data[label]["Key"])
+                if text == nil then
+                    DBinder:SetText("NONE")
+                else
+                    DBinder:SetText(text)
+                end
+            end
+            RunConsoleCommand("toolmenu")
+            DFrame:Show()
+        end)
     end
 
     --ADDCOMBOBOX
@@ -446,12 +604,12 @@ function OpenGui()
         DermaNumSlider:GetTextArea():Hide()
         local x,y = DermaNumSlider:GetSize()
         function DermaNumSlider.Slider.Knob:Paint(w,h)
-            draw.RoundedBox( 0, 0, 0, w, h, Color( 0, 174, 255) ) 
+            draw.RoundedBox( 0, 0, 0, w, h, Config["ThemeColor"] ) 
         end	
         local ratio = ((DermaNumSlider:GetValue()-DermaNumSlider:GetMin()) / (DermaNumSlider:GetMax()-DermaNumSlider:GetMin()))
         local scale = (ratio * x) / 1.87654321
         function DermaNumSlider.Slider.Knob:Paint(w,h)
-            draw.RoundedBox( 0, -(scale), h/2-y/2+y*0.25/1.5,(scale+w*ratio), y*0.75 , Color( 0, 174, 255) ) 
+            draw.RoundedBox( 0, -(scale), h/2-y/2+y*0.25/1.5,(scale+w*ratio), y*0.75 , Config["ThemeColor"] ) 
         end 
         function DermaNumSlider.Slider:Paint(w,h)
             surface.SetDrawColor( 60, 60, 60 )
@@ -463,7 +621,7 @@ function OpenGui()
             local ratio = ((DermaNumSlider:GetValue()-DermaNumSlider:GetMin()) / (DermaNumSlider:GetMax()-DermaNumSlider:GetMin()))
             local scale = (ratio * x) / 1.87654321
             function DermaNumSlider.Slider.Knob:Paint(w,h)
-                draw.RoundedBox( 0, -(scale), h/2-y/2+y*0.25/1.5,(scale+w*ratio), y*0.75 , Color( 0, 174, 255) ) 
+                draw.RoundedBox( 0, -(scale), h/2-y/2+y*0.25/1.5,(scale+w*ratio), y*0.75 , Config["ThemeColor"] ) 
             end 
             func(value)
         end
@@ -475,7 +633,7 @@ function OpenGui()
         frame:SetSize(X(300),Y(400))
         frame:Center()
         frame:ShowCloseButton(false)
-        addButton("WallHack",frame,false,
+        addButton("Wallhack",frame,false,
         function()
             local mat = Material("!wallhack")
             local sub = Material("pp/colour")
@@ -483,78 +641,87 @@ function OpenGui()
                 if string.sub(index,1,1) == "$" then
                     if type(var) == "string" then
                         sub:SetString(index,var)
-                        print(index)
-                        print(var)
                     else 
                         sub:SetFloat(index,var)
                     end
-                end
+                end 
             end)
-            PrintTable(sub:GetKeyValues())
             sub:Recompute()
             hook.Add( "HUDPaint", "wallhack", function()
-                for id, ply in ipairs( player.GetAll() ) do
-                    cam.Start3D()
-                    local color = Data["Wallhack"]["Color"]:GetColor()
-                    render.SetColorModulation(color["r"]/255,color["g"]/255,color["b"]/255)
-                    render.SuppressEngineLighting(true)
-                    render.MaterialOverride(mat)
-                    --ply:DrawModel()
-                    render.MaterialOverride(sub)
-                    ply:DrawModel()
-                    render.SuppressEngineLighting(false)
-                    cam.End3D()
+                cam.Start3D()
+                local color = Data["Wallhack"]["Color"]:GetColor()
+                render.SetColorModulation(color["r"]/255,color["g"]/255,color["b"]/255)
+                render.SetLightingMode(math.Round(Data["Wallhack"]["LightStyle"]))
+                render.EnableClipping(true)
+                render.SetBlend(Data["Wallhack"]["Color"]:GetColor()["a"]/255)
+                if Data["Wallhack"]["Player"] then
+                    for id, ply in ipairs( player.GetAll() ) do
+                        render.MaterialOverride(mat)
+                        ply:DrawModel()
+                        render.MaterialOverride(sub)
+                        ply:DrawModel()
+                    end
                 end
+                if Data["Wallhack"]["Props"] then
+                    table.foreach(ents.GetAll(),function(index,entity)
+                        if entity:GetClass() == "prop_physics" then 
+                            render.MaterialOverride(mat)
+                            entity:DrawModel()
+                            render.MaterialOverride(sub)
+                            entity:DrawModel()
+                            
+                        end
+                    end)
+                end
+                if Data["Wallhack"]["Entity"] then
+                    table.foreach(ents.GetAll(),function(index,entity)
+                        if entity:GetClass() != "prop_physics" and type(entity) == "Entity" then 
+                            render.MaterialOverride(mat)
+                            entity:DrawModel()
+                            render.MaterialOverride(sub)
+                            entity:DrawModel()
+                        end
+                    end)
+                end
+                render.SetLightingMode(0)
+                cam.End3D()
             end)
         end,
         function()
             hook.Add( "HUDPaint", "wallhack", function() end )
-            for id, ply in ipairs( player.GetAll() ) do
-                ply:SetColor(Color(255,255,255))
-                ply:SetMaterial("")
-            end
         end,
         function(frame)
-            frame:SetSize(X(300),Y(425))
+            frame:SetSize(X(300),Y(445))
             frame:ShowCloseButton(false)
+
             addLabel("Visual",frame)
+
             addColorMixer("SetColor :",frame,Data["Wallhack"]["Color"],
-            function(value)
-                Data["Wallhack"]["Color"] = value
-            end)
+            function(value)     Data["Wallhack"]["Color"] = value end)
+
             addButton("HSV",frame,Data["Wallhack"]["HSV"],
-            function()
-                Data["Wallhack"]["HSV"] = true
-            end,
-            function()
-                Data["Wallhack"]["HSV"] = false
-            end)
-            addSlider("Speed :",frame,10,100,50,
-            function(var)
-                Data["Wallhack"]["Speed"] = var
-            end)
+            function()    Data["Wallhack"]["HSV"] = true end,
+            function()    Data["Wallhack"]["HSV"] = false end)
+            
+            addSlider("Speed :",frame,10,100,Data["Wallhack"]["Speed"],function(var) Data["Wallhack"]["Speed"] = var end)
+            
+            addLabel("Light",frame)
+            
+            addSlider("Style :",frame,0,2,1,function(var) Data["Wallhack"]["LightStyle"] = var end)
+
             addLabel("Target",frame)
-            addButton("Player",frame,true,
-            function()
-                Data["Wallhack"]["Player"] = true
-            end,
-            function()
-                Data["Wallhack"]["Player"] = false
-            end)
-            addButton("Props",frame,false,
-            function()
-                Data["Wallhack"]["Props"] = true
-            end,
-            function()
-                Data["Wallhack"]["Props"] = false
-            end)
-            addButton("Entity",frame,false,
-            function()
-                Data["Wallhack"]["Entity"] = true
-            end,
-            function()
-                Data["Wallhack"]["Entity"] = false
-            end)
+            
+            addButton("Player",frame,Data["Wallhack"]["Player"],
+            function()    Data["Wallhack"]["Player"] = true end,
+            function()    Data["Wallhack"]["Player"] = false end)
+            
+            addButton("Props",frame,Data["Wallhack"]["Props"],
+            function()    Data["Wallhack"]["Props"] = true end,
+            function()    Data["Wallhack"]["Props"] = false end)
+            
+            addButton("Entity",frame,Data["Wallhack"]["Entity"],
+            function()    Data["Wallhack"]["Entity"] = true end,
+            function()    Data["Wallhack"]["Entity"] = false end)
         end)
         addButton("Tracer",frame,false,
         function()
@@ -568,16 +735,15 @@ function OpenGui()
                 elseif Data["Tracer"]["StartPos"] == "Down" then
                     center = Vector(ScrW() / 2, ScrH(),0)
                 end
+                cam.Start2D()
                 if (Data["Tracer"]["Player"]) then
                     for id, ply in ipairs( player.GetAll() ) do
                         if ply:GetName() == LocalPlayer():GetName() then continue end
                         local pos = ply:GetAttachment(ply:LookupAttachment("anim_attachment_head")).Pos   
                         local x = ply:GetPos():ToScreen().x
                         local y = ply:GetPos():ToScreen().y
-                        cam.Start2D()
                         surface.SetDrawColor( Data["Tracer"]["Color"]:GetColor() )
                         surface.DrawLine(center.x,center.y,pos:ToScreen().x,pos:ToScreen().y)
-                        cam.End2D()
                     end
                 end
                 if (Data["Tracer"]["Props"]) then
@@ -591,10 +757,8 @@ function OpenGui()
                             end
                             local x = pos:ToScreen().x
                             local y = pos:ToScreen().y
-                            cam.Start2D()
                             surface.SetDrawColor( Data["Tracer"]["Color"]:GetColor() )
                             surface.DrawLine(center.x,center.y,pos:ToScreen().x,pos:ToScreen().y)
-                            cam.End2D()
                         end
                     end)
                 end
@@ -609,13 +773,12 @@ function OpenGui()
                             end
                             local x = pos:ToScreen().x
                             local y = pos:ToScreen().y
-                            cam.Start2D()
                             surface.SetDrawColor( Data["Tracer"]["Color"]:GetColor() )
                             surface.DrawLine(center.x,center.y,pos:ToScreen().x,pos:ToScreen().y)
-                            cam.End2D()
                         end
                     end)
                 end
+                cam.End2D()
             end)
         end,
         function()
@@ -682,18 +845,28 @@ function OpenGui()
                 Data["Tracer"]["Entity"] = false
             end)
         end)
+        addButton("Freecam",frame,false,
+        function()
+            
+        end,
+        function()
+            
+        end,
+        function(frame)
+            frame:SetSize(X(300),Y(425))
+            frame:ShowCloseButton(false)
+            
+        end)
     end)
     AddPage("Aimbot","icon16/target2.png",function(frame) 
         frame:SetSize(X(300),Y(400))
         frame:ShowCloseButton(false)
     end)
-
     function GuiFrame:Paint(w, h)    
         draw.RoundedBox(3, 0, Y(22) , w, h, Color(50,50,50))   
     end
     return GuiFrame
 end
-
 
 surface.CreateFont( "custom-font", {
 	font = "Cambria", 
@@ -716,15 +889,17 @@ surface.CreateFont( "custom-font", {
 local GuiFrame = OpenGui()
 
 concommand.Add( "toolmenu", function( ply, cmd, args, str )
-    if ( Menu == 0 ) then
+    if ( Menu ) then
         GuiFrame:Show()
-        Menu = 1
+        Menu = false
     else
         GuiFrame:Hide()
         hook.Call("hideDarmaMenu")
-        Menu = 0
+        Menu = true
     end
 end )
+
+local toggleDrag = true
 
 hook.Add("Think", "toolmenu", function() 
     if  input.IsKeyDown(Config["key"]) and Config["KEY"] != 1 and !(LocalPlayer():IsTyping())  then
@@ -740,5 +915,52 @@ hook.Add("Think", "toolmenu", function()
     if Data["Wallhack"]["HSV"] then
         local color = HSVToColor( Data["Wallhack"]["Speed"] * CurTime() % 360, 1, 1 )
         Data["Wallhack"]["Color"]:SetColor(color)
+    end
+    if input.IsMouseDown(MOUSE_LEFT) then
+        if background:IsHovered() and toggleDrag then
+            table.foreach(FShow,function(index,var)
+                if var and Drag["MousePos"] != nil then
+                    local frame = index
+                    local oldx = Drag["MousePos"]["x"]
+                    local oldy = Drag["MousePos"]["y"]
+                    local x,y = background:LocalCursorPos()
+                    local dif = 
+                    {
+                        x = x-oldx,
+                        y = y-oldy
+                    }
+                    frame:SetPos(frame:GetX()+dif["x"],frame:GetY()+dif["y"])
+                end
+            end)
+            local x,y = background:LocalCursorPos()
+            Drag["MousePos"] = 
+            {
+                x = x,
+                y = y
+            }
+        elseif !background:IsHovered() then
+            toggleDrag = false
+        end
+    else
+        toggleDrag = true
+        if Drag["MousePos"] then
+            Drag["MousePos"] = nil     
+        end
+    end
+end)
+
+hook.Add("CreateMove", "MouseInput", function()
+    if background:IsHovered() then
+        if input.WasMousePressed(MOUSE_WHEEL_UP) then
+            Drag["Size"] = Drag["Size"] + 0.01
+            for _, child in ipairs( background:GetChildren() ) do
+                resizeFrame(child,Drag["Size"])
+            end
+        elseif input.WasMousePressed(MOUSE_WHEEL_DOWN) then
+            Drag["Size"] = Drag["Size"] - 0.01
+            for _, child in ipairs( background:GetChildren() ) do
+                resizeFrame(child,Drag["Size"])
+            end
+        end
     end
 end)
