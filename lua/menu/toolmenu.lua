@@ -53,8 +53,7 @@ local Data =
         Entity = false,
         Material = 
         {
-            ["$translucent"] = 0,
-            ["$vertexalpha"] = 0
+            
         },
         LightStyle = 1,
         LightPattern = "m",
@@ -70,6 +69,21 @@ local Data =
         Props = false,
         Entity = false,
         Key = KEY_NONE
+    },
+    Freecam = 
+    {
+        Keys = {
+            Close = KEY_R,
+            Forward = input.GetKeyCode(input.LookupBinding( "forward" )),
+            Back = input.GetKeyCode(input.LookupBinding( "back" )),
+            Left = input.GetKeyCode(input.LookupBinding( "moveleft" )),
+            Right = input.GetKeyCode(input.LookupBinding( "moveright" )),
+            Speed = input.GetKeyCode(input.LookupBinding( "speed" )),
+        },
+        Angles = Angle(0,0,0),
+        Pos = Vector(0,0,0),
+        Speed = 5,
+        SprintSpeed = 10
     }
 }
 
@@ -192,7 +206,7 @@ function OpenGui()
     background:SetMouseInputEnabled(true)
     //background:OpenURL("asset://garrysmod/html/background.html") 
     
-    --PAGES
+    --ADDPAGES
     local pages = {count = 0,buttonPos=0}
     local alt = {}
     local function AddPage(label,icon,func)  
@@ -847,10 +861,70 @@ function OpenGui()
         end)
         addButton("Freecam",frame,false,
         function()
+            local frame = vgui.Create( "DFrame" )
+            frame:SetSize( ScrW(), ScrH() )
+            frame:Center()
+            frame:MakePopup()
+            frame:SetTitle("")
+            frame:ShowCloseButton(false)
+            frame:SetDraggable(false)
+            local DLabel = vgui.Create("DLabel",frame)
+            DLabel:Center()
+            Data["Freecam"]["Pos"] = LocalPlayer():EyePos()
+            Data["Freecam"]["Angles"] = LocalPlayer():EyeAngles()
+            input.SetCursorPos(ScrW()/2,ScrH()/2)
+            hook.Add("CreateMove", "Freecam", function()
+                if frame:IsHovered() then
+                    frame:SetCursor("blank")
+                    local x , y = frame:LocalCursorPos()
+                    Data["Freecam"]["Angles"].y = Data["Freecam"]["Angles"].y - (x - ScrW()/2) 
+                    Data["Freecam"]["Angles"].x = Data["Freecam"]["Angles"].x + (y - ScrH()/2)
+                    if Data["Freecam"]["Angles"].x > 90 then
+                        Data["Freecam"]["Angles"].x = 90
+                    end
+                    if Data["Freecam"]["Angles"].x < -90 then
+                        Data["Freecam"]["Angles"].x = -90
+                    end
+                    input.SetCursorPos(ScrW()/2,ScrH()/2)
+                    function frame:Paint( w, h )
+    
+                        local x, y = self:GetPos()
             
+                        local old = DisableClipping( true ) 
+                        render.RenderView( {
+                            origin = Data["Freecam"]["Pos"],
+                            angles = Data["Freecam"]["Angles"],
+                            x = x, y = y,
+                            w = w, h = h,
+                            drawhud = true
+                        } )
+                        DisableClipping( old )
+                    end
+                end
+            end)
+            hook.Add("Think", "freecam_input", function() 
+                local speed = Data["Freecam"]["Speed"]
+                for index, key in pairs(Data["Freecam"]["Keys"]) do
+                    if input.IsKeyDown( Data["Freecam"]["Keys"]["Speed"] ) then
+                        speed = Data["Freecam"]["SprintSpeed"]
+                    end
+                    local angles = Data["Freecam"]["Angles"]
+                    if index == "Close" and input.IsKeyDown( key ) then
+                        frame:Remove()  
+                    elseif index == "Forward" and input.IsKeyDown( key ) then
+                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Forward() * speed
+                    elseif index == "Back" and input.IsKeyDown( key ) then
+                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Forward() * speed
+                    elseif index == "Left" and input.IsKeyDown( key ) then
+                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Right() * speed
+                    elseif index == "Right" and input.IsKeyDown( key ) then
+                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Right() * speed
+                    end
+                end
+            end)
         end,
         function()
-            
+            hook.Remove("Think","freecam_input")
         end,
         function(frame)
             frame:SetSize(X(300),Y(425))
