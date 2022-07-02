@@ -20,9 +20,9 @@ function draw(){
             var index = (x + y * Width) * 4
             var random =  noise(xoff,yoff,woff)
             if ( random > 0.5 ) {
-                pixels[index+0] = (random / 0.5) * (random * 10)
+                pixels[index+0] = (random / 0.5) * (random * 70)
                 pixels[index+1] = (random / 0.5) * (random * 10)
-                pixels[index+2] = (random / 0.5) * (random * 70)
+                pixels[index+2] = (random / 0.5) * (random * 10)
                 pixels[index+3] = 255
             }else if ( random > 0.25 ) {
                 pixels[index+0] = (random * 10) * (random / 0.5) 
