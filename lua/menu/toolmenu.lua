@@ -74,16 +74,29 @@ local Data =
     {
         Keys = {
             Close = KEY_R,
+            Tp = KEY_F,
             Forward = input.GetKeyCode(input.LookupBinding( "forward" )),
             Back = input.GetKeyCode(input.LookupBinding( "back" )),
             Left = input.GetKeyCode(input.LookupBinding( "moveleft" )),
             Right = input.GetKeyCode(input.LookupBinding( "moveright" )),
             Speed = input.GetKeyCode(input.LookupBinding( "speed" )),
+            Jump = input.GetKeyCode(input.LookupBinding( "jump" )),
+            Duck = input.GetKeyCode(input.LookupBinding( "duck" )),
         },
         Angles = Angle(0,0,0),
         Pos = Vector(0,0,0),
-        Speed = 5,
-        SprintSpeed = 10
+        Speed = 25,
+        SprintSpeed = 50,
+        DuckSpeed = 10,
+        InUse = false
+    },
+    Crash = 
+    {
+        Target = NULL,
+    },
+    ESP = 
+    {
+        Name = true,
     }
 }
 
@@ -94,10 +107,10 @@ CreateMaterial( "wallhack", "VertexLitGeneric", {
     ["$vertexalpha"] = 1,
     ["$vertexcolor"] = 1,
     ["$ignorez"] = 1
-  } )
+} )
 
 surface.CreateFont( "page-font", {
-	font = "Arial", --  Use the font-name which is shown to you by your operating system Font Viewer, not the file name
+	font = "Arial", 
 	extended = false,
 	size = 30,
 	weight = 500,
@@ -118,7 +131,7 @@ function setFontSize(size)
     surface.CreateFont( "custom-font", {
         font = "Cambria", 
         extended = false,
-        size = 17*size,
+        size = Size(17)*size,
         weight = 500,
         blursize = 0,
         scanlines = 0,
@@ -187,6 +200,105 @@ function resizeFrame(frame,size)
     end
 end
 
+function lookAt(pos)
+    local eye = EyePos()
+    local sub = eye - pos
+    sub:Normalize()
+    sub = sub:Angle()
+    local ang = Angle(-sub.p,sub.y+180,sub.r)
+    LocalPlayer():SetEyeAngles(ang)
+end
+
+function haveWeapon(class)
+    local weapons = LocalPlayer():GetWeapons()
+    for _,weapon in pairs(weapons) do
+        if weapon:GetClass() == class then
+            return weapon
+        end
+    end
+    return false
+end
+
+function equipWeapon(class)
+    local weapon = haveWeapon(class)
+    if weapon then
+        input.SelectWeapon(weapon)
+        return weapon
+    end
+    return false
+end
+
+if AdvDupe2 != nil then
+    function spawnDupe(name)
+        local weapon = equipWeapon("gmod_tool")
+        if !weapon then
+            GAMEMODE:AddNotify("AdvDupe2 Exploit : LocalPlayer doesn't have a toolgun",NOTIFY_ERROR,3)
+            return false
+        else
+            AdvDupe2.UploadFile(name,0)
+            if weapon:GetMode() != "advdupe2" then
+                GAMEMODE:AddNotify("AdvDupe2 Exploit : pls select advdupe2 tool",NOTIFY_ERROR,3)
+                return false
+            else
+                timer.Create("AdvDupe2", 0.25, 0, function()
+                    RunConsoleCommand("advdupe2_original_origin","1")
+                    RunConsoleCommand("+attack")
+                    timer.Create("AdvDupe2", 0, 0, function()
+                        RunConsoleCommand("-attack")
+                        timer.Remove("AdvDupe2")
+                    end)
+                end)
+                return true
+            end
+        end
+    end
+    function spawnProp(model,pos,angle,frozen)
+        local function generateDupe(model,pos,angle,frozen)
+            local tab =
+            {
+                Constraints =
+                {
+
+                },
+                Entities = 
+                {
+                    [0] = 
+                    {
+                        Class = "prop_physics",
+                        CollisionGroup = 0,
+                        Model = model,
+                        PhysicsObjects = 
+                        {
+                            [0] = 
+                            {
+                                Angle = angle,
+                                Frozen = frozen,
+                                Pos = Vector(0,0,0)
+                            }
+                        }
+                    }
+                },
+                HeadEnt = 
+                {
+                    ["Index"] = 0,
+                    ["Pos"] = pos,
+                    ["Z"] = 16.892868041992,
+                }
+            }
+            return tab
+        end
+        local read = file.Read("advdupe2/test.txt")
+        local success, dupe, info, moreinfo = AdvDupe2.Decode(read)
+        local dupe = generateDupe(model,pos,angle,frozen)
+        AdvDupe2.Encode(dupe,info,function(data)
+            local file = file.Open("advdupe2/exploit.txt","wb","DATA")
+            file:Write(data)
+            file:Close()
+        end)
+        spawnDupe("exploit")
+    end
+end
+
 function OpenGui()
 
     --MAIN FRAME
@@ -204,7 +316,7 @@ function OpenGui()
     background:SetPos(0,20)
     background:SetSize(w,h-Y(60))
     background:SetMouseInputEnabled(true)
-    //background:OpenURL("asset://garrysmod/html/background.html") 
+    background:OpenURL("asset://garrysmod/html/background.html") 
     
     --ADDPAGES
     local pages = {count = 0,buttonPos=0}
@@ -383,13 +495,17 @@ function OpenGui()
         DLabel:SetText( label )
         DLabel:SetFont("custom-font")
         DLabel:SetMouseInputEnabled( true )
+        DLabel:SetTextColor(Color(255,255,255))
+        local x , y = DLabel:GetSize()
+        local x = frame:GetSize()
+        DLabel:SetSize(x,y)
         function DLabel:DoClick() 
             if DColorButton:GetColor() == Config["ThemeColor"] then
                 DColorButton:SetColor( Color( 90, 90, 90) )
-                off()
+                off(DColorButton)
             else
                 DColorButton:SetColor( Config["ThemeColor"] )
-                on()
+                on(DColorButton)
             end
         end
         pages[Index]["pos"] = pages[Index]["pos"] + 20
@@ -404,10 +520,10 @@ function OpenGui()
         end
         if initValue then
             DColorButton:SetColor( Config["ThemeColor"] )
-            on()
+            on(DColorButton)
         else
             DColorButton:SetColor( Color( 90, 90, 90) )
-            off()
+            off(DColorButton)
         end
         if param != nil then
             local setting = vgui.Create("DFrame", background)
@@ -520,9 +636,17 @@ function OpenGui()
             end
         end)
         local pos = pages[Index]["pos"]
+        if label != nil then
+            local DLabel = vgui.Create( "DLabel", pages[Index]["frame"] )
+            DLabel:SetPos( X(35),Y(35) + pos )
+            DLabel:SetText( label )
+            DLabel:SetFont("custom-font")
+            pages[Index]["pos"] = pages[Index]["pos"] + 20
+        end
+        local pos = pages[Index]["pos"]
         local w,h = frame:GetSize()
         local DComboBox = vgui.Create("DComboBox", frame)
-        DComboBox:SetPos(X(35) ,Y(55) + pos)    
+        DComboBox:SetPos(X(35) ,Y(35) + pos)    
         DComboBox:SetSize( Size(w*0.6), Size(20) )
         DComboBox:Paint( 100, 30 )
         if initValue != nil then DComboBox:SetValue(initValue) end
@@ -538,11 +662,7 @@ function OpenGui()
                 end
             end)
         end
-        local DLabel = vgui.Create( "DLabel", pages[Index]["frame"] )
-        DLabel:SetPos( X(35),Y(35) + pos )
-        DLabel:SetText( label )
-        DLabel:SetFont("custom-font")
-        pages[Index]["pos"] = pages[Index]["pos"] + 40
+        pages[Index]["pos"] = pages[Index]["pos"] + 20
     end
 
     --ADDCOLORMIXER
@@ -587,6 +707,8 @@ function OpenGui()
         local DLabel = vgui.Create( "DLabel", pages[Index]["frame"] )
         DLabel:SetText( label )
         DLabel:SetFont("custom-font")
+        DLabel:SetTextColor(Color(255,255,255))
+        DLabel:SizeToContents()
         local x,y = DLabel:GetSize()
         DLabel:SetPos( X(w*0.5-x/2),Y(35) + pos )
         pages[Index]["pos"] = pages[Index]["pos"] + 20
@@ -661,7 +783,7 @@ function OpenGui()
                 end 
             end)
             sub:Recompute()
-            hook.Add( "HUDPaint", "wallhack", function()
+            hook.Add( "PreDrawHUD", "wallhack", function()
                 cam.Start3D()
                 local color = Data["Wallhack"]["Color"]:GetColor()
                 render.SetColorModulation(color["r"]/255,color["g"]/255,color["b"]/255)
@@ -702,7 +824,7 @@ function OpenGui()
             end)
         end,
         function()
-            hook.Add( "HUDPaint", "wallhack", function() end )
+            hook.Add( "PreDrawHUD", "wallhack", function() end )
         end,
         function(frame)
             frame:SetSize(X(300),Y(445))
@@ -859,8 +981,16 @@ function OpenGui()
                 Data["Tracer"]["Entity"] = false
             end)
         end)
+        local function off()
+            Data["Freecam"]["InUse"] = false
+            hook.Remove("Think","freecam_input")
+            hook.Remove("CreateMove","Freecam")
+            LocalPlayer():DrawViewModel(true)
+            hook.Remove("ShouldDrawLocalPlayer","freecam")
+        end
         addButton("Freecam",frame,false,
-        function()
+        function(button)
+            Data["Freecam"]["InUse"] = true
             local frame = vgui.Create( "DFrame" )
             frame:SetSize( ScrW(), ScrH() )
             frame:Center()
@@ -868,17 +998,47 @@ function OpenGui()
             frame:SetTitle("")
             frame:ShowCloseButton(false)
             frame:SetDraggable(false)
-            local DLabel = vgui.Create("DLabel",frame)
-            DLabel:Center()
+            local paint = {}
+            local count = 0
+            local function addKeyDisplay(label,keylabel)
+                local x , y = frame:GetSize()
+                local DLabel = vgui.Create("DLabel",frame)
+                DLabel:SetFont("freecam-font")
+                DLabel:SetText(label)
+                DLabel:SizeToContents()
+                local sx , sy = DLabel:GetSize()
+                DLabel:SetPos(X(100),y-sy-Y(100)-(Y(60)*count))
+                DLabel:SetTextColor(Color(255,255,255))
+                table.insert(paint,function(w,h)
+                    local x , y = DLabel:GetPos()
+                    local sx , sy = DLabel:GetSize()
+                    local x = x-Size(50)-X(20)
+                    local y = y-(sy/2)
+                    local size = Size(50)
+                    surface.SetDrawColor(Color(255,255,255))
+                    surface.DrawOutlinedRect(x,y,size,size,2)
+                    surface.SetTextColor(Color(255,255,255))
+                    surface.SetTextPos(x+size/6,y)
+                    surface.SetFont("freecam-maj-font")
+                    surface.DrawText(keylabel)
+                end)
+                count = count + 1
+            end
+            addKeyDisplay("Close & Create tp","F")
+            addKeyDisplay("Close","R")
             Data["Freecam"]["Pos"] = LocalPlayer():EyePos()
             Data["Freecam"]["Angles"] = LocalPlayer():EyeAngles()
             input.SetCursorPos(ScrW()/2,ScrH()/2)
+            hook.Add("ShouldDrawLocalPlayer","freecam",function()
+                return true
+            end)
             hook.Add("CreateMove", "Freecam", function()
                 if frame:IsHovered() then
                     frame:SetCursor("blank")
                     local x , y = frame:LocalCursorPos()
-                    Data["Freecam"]["Angles"].y = Data["Freecam"]["Angles"].y - (x - ScrW()/2) 
-                    Data["Freecam"]["Angles"].x = Data["Freecam"]["Angles"].x + (y - ScrH()/2)
+                    local sx , sy = frame:GetSize()
+                    Data["Freecam"]["Angles"].y = Data["Freecam"]["Angles"].y - (x - sx/2) /2
+                    Data["Freecam"]["Angles"].x = Data["Freecam"]["Angles"].x + (y - sy/2) /2
                     if Data["Freecam"]["Angles"].x > 90 then
                         Data["Freecam"]["Angles"].x = 90
                     end
@@ -887,9 +1047,9 @@ function OpenGui()
                     end
                     input.SetCursorPos(ScrW()/2,ScrH()/2)
                     function frame:Paint( w, h )
-    
+        
                         local x, y = self:GetPos()
-            
+                
                         local old = DisableClipping( true ) 
                         render.RenderView( {
                             origin = Data["Freecam"]["Pos"],
@@ -899,7 +1059,11 @@ function OpenGui()
                             drawhud = true
                         } )
                         DisableClipping( old )
+                        for _,func in pairs(paint) do
+                            func(w,h)
+                        end
                     end
+                    LocalPlayer():DrawViewModel(false)
                 end
             end)
             hook.Add("Think", "freecam_input", function() 
@@ -907,34 +1071,363 @@ function OpenGui()
                 for index, key in pairs(Data["Freecam"]["Keys"]) do
                     if input.IsKeyDown( Data["Freecam"]["Keys"]["Speed"] ) then
                         speed = Data["Freecam"]["SprintSpeed"]
+                    elseif input.IsKeyDown( Data["Freecam"]["Keys"]["Duck"] ) then
+                        speed = Data["Freecam"]["DuckSpeed"]
                     end
                     local angles = Data["Freecam"]["Angles"]
-                    if index == "Close" and input.IsKeyDown( key ) then
-                        frame:Remove()  
-                    elseif index == "Forward" and input.IsKeyDown( key ) then
-                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Forward() * speed
-                    elseif index == "Back" and input.IsKeyDown( key ) then
-                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Forward() * speed
-                    elseif index == "Left" and input.IsKeyDown( key ) then
-                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Right() * speed
-                    elseif index == "Right" and input.IsKeyDown( key ) then
-                        Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Right() * speed
+                    if input.IsKeyDown( key ) then 
+                        local function close()
+                            frame:Remove()  
+                            off()
+                            button:SetColor(Color(90,90,90))
+                            GuiFrame:Hide()
+                            hook.Call("hideDarmaMenu")
+                            Menu = true
+                        end
+                        if index == "Close" then
+                            close()
+                        elseif index == "Tp" then 
+                            close()
+                            function generateDupe(startpos,endpos)
+                                local tab = 
+                                {
+                                    ["Constraints"] = {
+                                        [1] = {
+                                            ["BuildDupeInfo"] = {
+                                                ["Ent1Ang"] = Angle(9.0949919464593e-24, 8.8891499672172e-07, -2.1011048829678e-06),
+                                                ["Ent1Pos"] = startpos,
+                                                ["Ent2Ang"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                                ["EntityPos"] = Vector(0,0,0),
+                                            },
+                                            ["Entity"] = {
+                                                [1] = {
+                                                    ["Bone"] = 0,
+                                                    ["Index"] = 118,
+                                                    ["LPos"] = Vector(0,0,0),
+                                                },
+                                                [4] = {
+                                                    ["Bone"] = 0,
+                                                    ["Index"] = 119,
+                                                    ["LPos"] = Vector(0,0,0),
+                                                },
+                                            },
+                                            ["LPos1"] = endpos,
+                                            ["LPos4"] = endpos,
+                                            ["Type"] = "Pulley",
+                                            ["WPos2"] = Vector(0,0,0),
+                                            ["WPos3"] = Vector(0,0,0),
+                                            ["color"] = {
+                                                ["a"] = 255,
+                                                ["b"] = 255,
+                                                ["g"] = 255,
+                                                ["r"] = 255,
+                                            },
+                                            ["forcelimit"] = 0,
+                                            ["material"] = "cable/cable2",
+                                            ["rigid"] = false,
+                                            ["width"] = 3,
+                                        },
+                                    },
+                                    ["Entities"] = {
+                                        [118] = {
+                                            ["Class"] = "prop_physics",
+                                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                                            ["PhysicsObjects"] = {
+                                                [0] = {
+                                                    ["Angle"] = Angle(9.0949919464593e-24, 8.8891499672172e-07, -2.1011048829678e-06),
+                                                    ["Pos"] = endpos-startpos,
+                                                },
+                                            },
+                                            ["CollisionGroup"] =  10
+                                        },
+                                        [119] = {
+                                            ["Class"] = "prop_physics",
+                                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                                            ["PhysicsObjects"] = {
+                                                [0] = {
+                                                    ["Angle"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                                    ["Pos"] = Vector(0,0,0),
+                                                },
+                                            },
+                                            ["CollisionGroup"] =  10
+                                        },
+                                        [120] = {
+                                            ["Class"] = "prop_physics",
+                                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                                            ["BuildDupeInfo"] = {
+                                                ["DupeParentID"] = 119.0
+                                            },
+                                            ["PhysicsObjects"] = {
+                                                [0] = {
+                                                    ["Angle"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                                    ["Pos"] = Vector(0,0,0),
+                                                },
+                                            },
+                                            ["CollisionGroup"] =  0
+                                        }
+                                    },
+                                    ["HeadEnt"] = {
+                                        ["Index"] = 119,
+                                        ["Pos"] = startpos+Vector(0,0,10),
+                                        ["Z"] = 43.394760131836,
+                                    },
+                                }         
+                                return tab
+                            end  
+                            local tab = generateDupe(LocalPlayer():GetPos(),Data["Freecam"]["Pos"])
+                            AdvDupe2.Encode(tab,{},function(data)
+                                local File = file.Open("advdupe2/tp.txt","wb","DATA")
+                                File:Write(data)
+                                File:Close()
+                            end)
+                            local spawned = spawnDupe("tp")
+                            if spawned then
+                                timer.Create("Tp", 0.3, 1, function()
+                                    equipWeapon("weapon_physgun")
+                                    timer.Create("Tp",0.3,2,function()
+                                        timer.Create("Tp",0.2,2,function()
+                                            --RunConsoleCommand("+reload")
+                                            timer.Create("Tp1",0.05,1,function()
+                                                --RunConsoleCommand("-reload")
+                                            end)
+                                        end)
+                                    end)
+                                end)
+                                timer.Create("Look", 0.9, 1, function()
+                                    lookAt(LocalPlayer():GetPos())
+                                end)
+                            end
+                        elseif index == "Forward" then
+                            Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Forward() * speed
+                        elseif index == "Back" then
+                            Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Forward() * speed
+                        elseif index == "Left" then
+                            Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] - angles:Right() * speed
+                        elseif index == "Right" then
+                            Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + angles:Right() * speed
+                        elseif index == "Jump" then
+                            Data["Freecam"]["Pos"] = Data["Freecam"]["Pos"] + Vector(0,0,1) * speed
+                        end
                     end
                 end
             end)
         end,
-        function()
-            hook.Remove("Think","freecam_input")
-        end,
+        off,
         function(frame)
             frame:SetSize(X(300),Y(425))
             frame:ShowCloseButton(false)
             
         end)
+        addButton("ESP",frame,false,
+        function()
+            hook.Add("PreDrawHUD","ESP",function()
+                cam.Start2D()
+                for id, ply in ipairs( player.GetAll() ) do
+                    local data2D = ply:GetPos():ToScreen()
+                    if ( not data2D.visible ) then continue end
+                    if Data["ESP"]["Name"] then
+                        draw.SimpleText( ply:GetName(), "Default", data2D.x, data2D.y, Color( 255, 255, 255 ), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER )
+                    end
+                end
+                cam.End2D()
+            end)
+        end,
+        function()
+            hook.Remove("PreDrawHUD","ESP")
+        end,
+        function(frame)
+            frame:SetSize(X(100),Y(50))
+            frame:ShowCloseButton(false)
+            addButton("Name",frame,Data["ESP"]["Name"],
+            function()
+                Data["ESP"]["Name"] = true
+            end,
+            function()
+                Data["ESP"]["Name"] = false
+            end)
+        end)
     end)
-    AddPage("Aimbot","icon16/target2.png",function(frame) 
+    AddPage("Misc","icon16/target2.png",function(frame) 
         frame:SetSize(X(300),Y(400))
         frame:ShowCloseButton(false)
+        addButton( "BHop",frame,false,
+        function()
+            function Bunnyhop()
+                if  input.IsKeyDown(KEY_SPACE) then
+                    print( LocalPlayer():IsOnGround())
+                    if LocalPlayer():IsOnGround() then
+                        RunConsoleCommand("+jump")
+                        timer.Create("Bhop", 0.1, 0, function()
+                            RunConsoleCommand("-jump")
+                        end)
+                    end
+                end
+            end
+            
+            hook.Add("Think", "Bunnyhop", Bunnyhop )
+        end,
+        function()
+            hook.Remove("Think","Bunnyhop")
+        end)
+    end)
+    AddPage("Exploits","icon16/target2.png",function(frame) 
+        frame:SetSize(X(300),Y(400))
+        frame:ShowCloseButton(false)
+        addLabel("AdvDupe2",frame)
+        addButton( "Tp",frame,false,
+        function() 
+            function generateDupe(startpos,endpos)
+                local tab = 
+                {
+                    ["Constraints"] = {
+                        [1] = {
+                            ["BuildDupeInfo"] = {
+                                ["Ent1Ang"] = Angle(9.0949919464593e-24, 8.8891499672172e-07, -2.1011048829678e-06),
+                                ["Ent1Pos"] = startpos,
+                                ["Ent2Ang"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                ["EntityPos"] = Vector(0,0,0),
+                            },
+                            ["Entity"] = {
+                                [1] = {
+                                    ["Bone"] = 0,
+                                    ["Index"] = 118,
+                                    ["LPos"] = Vector(0,0,0),
+                                },
+                                [4] = {
+                                    ["Bone"] = 0,
+                                    ["Index"] = 119,
+                                    ["LPos"] = Vector(0,0,0),
+                                },
+                            },
+                            ["LPos1"] = endpos,
+                            ["LPos4"] = endpos,
+                            ["Type"] = "Pulley",
+                            ["WPos2"] = Vector(0,0,0),
+                            ["WPos3"] = Vector(0,0,0),
+                            ["color"] = {
+                                ["a"] = 255,
+                                ["b"] = 255,
+                                ["g"] = 255,
+                                ["r"] = 255,
+                            },
+                            ["forcelimit"] = 0,
+                            ["material"] = "cable/cable2",
+                            ["rigid"] = false,
+                            ["width"] = 0,
+                        },
+                    },
+                    ["Entities"] = {
+                        [118] = {
+                            ["Class"] = "prop_physics",
+                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                            ["PhysicsObjects"] = {
+                                [0] = {
+                                    ["Angle"] = Angle(9.0949919464593e-24, 8.8891499672172e-07, -2.1011048829678e-06),
+                                    ["Pos"] = endpos-startpos,
+                                },
+                            },
+                            ["CollisionGroup"] =  10
+                        },
+                        [119] = {
+                            ["Class"] = "prop_physics",
+                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                            ["PhysicsObjects"] = {
+                                [0] = {
+                                    ["Angle"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                    ["Pos"] = Vector(0,0,0),
+                                },
+                            },
+                            ["CollisionGroup"] =  10
+                        },
+                        [120] = {
+                            ["Class"] = "prop_physics",
+                            ["Model"] = "models/hunter/plates/plate025x025.mdl",
+                            ["BuildDupeInfo"] = {
+                                ["DupeParentID"] = 119.0
+                            },
+                            ["PhysicsObjects"] = {
+                                [0] = {
+                                    ["Angle"] = Angle(-1.0045795846656e-13, 90.000007629395, 360),
+                                    ["Pos"] = Vector(0,0,0),
+                                },
+                            },
+                            ["CollisionGroup"] =  0
+                        }
+                    },
+                    ["HeadEnt"] = {
+                        ["Index"] = 119,
+                        ["Pos"] = startpos+Vector(0,0,10),
+                        ["Z"] = 43.394760131836,
+                    },
+                }         
+                return tab
+            end  
+            local tab = generateDupe(LocalPlayer():GetPos(),Vector(1350,650,65))
+            AdvDupe2.Encode(tab,{},function(data)
+                local File = file.Open("advdupe2/tp.txt","wb","DATA")
+                File:Write(data)
+                File:Close()
+            end)
+            local spawned = spawnDupe("tp")
+            if spawned then
+                timer.Create("Tp", 0.3, 0, function()
+                    lookAt(LocalPlayer():GetPos())
+                    equipWeapon("weapon_physgun")
+                    timer.Remove("Tp")
+                end)
+            end
+        end,
+        function()
+        end)
+        addButton("test",frame,false,
+        function()
+            local data = file.Read("advdupe2/pqrent.json","DATA")
+            --local File = file.Open("advdupe2/PQRENT.json","wb","DATA")
+            --data = util.TableToJSON(util.JSONToTable(data),true)
+            --File:Write(data)
+            --File:Close()
+            data = util.JSONToTable(data)
+            PrintTable(data)
+            AdvDupe2.Encode(data,{},function(data)
+                local File = file.Open("advdupe2/test.txt","wb","DATA")
+                File:Write(data)
+                File:Close()
+            end)
+        end,
+        function()
+        
+        end)
+        addLabel("ULX",frame)
+        addButton( "Crash Player",frame,false,
+        function()
+            if Data["Crash"]["Target"] != NULL then
+                hook.Add("Think","CrashPlayer",function()
+                    for z=0,1 do
+                        concommand.Run(LocalPlayer(),"ulx",{
+                            "psay",
+                            Data["Crash"]["Target"]:GetName(),
+                            "test"
+                        })
+                    end
+                end)
+            end
+        end,
+        function()
+            hook.Add("Think","CrashPlayer",function()end)
+        end)
+        local tab = {}
+        table.foreach(player.GetAll(),function(index,var)
+            if var != LocalPlayer() then
+                table.insert(tab,index,
+                {
+                    name = var:GetName(),
+                    func = function()
+                        Data["Crash"]["Target"] = var
+                    end
+                })
+            end
+        end)
+        addComboBox(nil,frame,"Choose a player",tab)
     end)
     function GuiFrame:Paint(w, h)    
         draw.RoundedBox(3, 0, Y(22) , w, h, Color(50,50,50))   
@@ -945,7 +1438,43 @@ end
 surface.CreateFont( "custom-font", {
 	font = "Cambria", 
 	extended = false,
-	size = 17,
+	size = Size(17),
+	weight = 500,
+	blursize = 0,
+	scanlines = 0,
+	antialias = true,
+	underline = false,
+	italic = false,
+	strikeout = false,
+	symbol = false,
+	rotary = false,
+	shadow = false,
+	additive = false,
+	outline = false,
+} )
+
+surface.CreateFont( "freecam-font", {
+	font = "Cambria", 
+	extended = false,
+	size = Size(25),
+	weight = 500,
+	blursize = 0,
+	scanlines = 0,
+	antialias = true,
+	underline = false,
+	italic = false,
+	strikeout = false,
+	symbol = false,
+	rotary = false,
+	shadow = false,
+	additive = false,
+	outline = false,
+} )
+
+surface.CreateFont( "freecam-maj-font", {
+	font = "Arial", 
+	extended = false,
+	size = Size(50),
 	weight = 500,
 	blursize = 0,
 	scanlines = 0,
@@ -1038,3 +1567,4 @@ hook.Add("CreateMove", "MouseInput", function()
         end
     end
 end)
+
